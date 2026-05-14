@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "PowerShell(npx tsc --noEmit 2>&1)",
+      "PowerShell(& \"C:\\\\Program Files\\\\nodejs\\\\node.exe\" \"C:\\\\Users\\\\g\\\\Desktop\\\\moneyheith\\\\node_modules\\\\typescript\\\\bin\\\\tsc\" -p \"C:\\\\Users\\\\g\\\\Desktop\\\\moneyheith\\\\tsconfig.json\" --noEmit 2>&1; \"EXIT_CODE:$LASTEXITCODE\")"
+    ]
+  }
+}

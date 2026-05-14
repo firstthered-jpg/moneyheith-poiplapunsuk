@@ -1,0 +1,63 @@
+{
+  "name": "moneyheith-poiplapunsuk",
+  "version": "1.0.0",
+  "description": "Moneyheith PoiplaPunsuk - เว็บบันทึกรายรับ-รายจ่าย กำไร-ขาดทุน",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -H 0.0.0.0 -p 3000",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit",
+    "electron": "electron electron-main.js",
+    "electron-dev": "concurrently npm:dev npm:wait-electron",
+    "wait-electron": "wait-on http://localhost:3000 && electron electron-main.js",
+    "electron-build": "next build && electron-builder"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.105.4",
+    "autoprefixer": "^10.4.0",
+    "clsx": "^2.0.0",
+    "date-fns": "^2.30.0",
+    "electron": "^27.0.0",
+    "framer-motion": "^10.16.0",
+    "lucide-react": "^0.292.0",
+    "next": "^14.0.0",
+    "postcss": "^8.4.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "recharts": "^2.10.0",
+    "sqlite3": "^5.1.0",
+    "tailwind-merge": "^2.2.0",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.0.0",
+    "xlsx": "^0.18.5",
+    "zustand": "^4.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "concurrently": "^8.0.0",
+    "electron-builder": "^24.0.0",
+    "electron-is-dev": "^2.0.0",
+    "wait-on": "^7.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "build": {
+    "appId": "com.moneyheith.app",
+    "productName": "Moneyheith PoiplaPunsuk",
+    "files": [
+      "dist/**/*",
+      "node_modules/**/*",
+      "electron-main.js",
+      "electron-preload.js",
+      "electron-db.js"
+    ],
+    "directories": {
+      "buildResources": "assets"
+    }
+  }
+}
