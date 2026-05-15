@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Header from '@/components/Header'
+import WelcomeBanner from '@/components/WelcomeBanner'
 import StatCard from '@/components/StatCard'
 import CashflowChart from '@/components/CashflowChart'
 import ExpenseBreakdown from '@/components/ExpenseBreakdown'
@@ -57,6 +58,9 @@ export default function Dashboard() {
       <Header />
 
       <main className="container-max py-8 space-y-6">
+        {/* Welcome Banner */}
+        <WelcomeBanner />
+
         {/* Title */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -122,21 +126,13 @@ export default function Dashboard() {
           />
         </div>
 
-        {/* Quick actions */}
-        <div className="grid grid-cols-2 gap-3">
-          <Link
-            href="/income"
-            className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-medium py-4 text-base shadow-sm transition-all hover:shadow-md"
-          >
-            + บันทึกยอดขาย
-          </Link>
-          <Link
-            href="/expense"
-            className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600 text-white font-medium py-4 text-base shadow-sm transition-all hover:shadow-md"
-          >
-            − บันทึกรายจ่าย
-          </Link>
-        </div>
+        {/* Quick action - Single button */}
+        <Link
+          href="/income"
+          className="inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white font-bold py-6 text-lg shadow-md transition-all hover:shadow-lg"
+        >
+          + บันทึกยอดขาย
+        </Link>
 
         {/* Daily Revenue */}
         <DailyRevenue />

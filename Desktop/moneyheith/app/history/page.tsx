@@ -1,11 +1,13 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Header from '@/components/Header'
 import { Card, CardContent } from '@/components/Card'
 import { useFinanceStore } from '@/lib/store-supabase'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { Search, Trash2, ChevronDown } from 'lucide-react'
+import { Search, Trash2, ChevronDown, Edit2 } from 'lucide-react'
+import EditTransactionModal from '@/components/EditTransactionModal'
 
 const typeLabel: Record<'all' | 'income' | 'expense', string> = {
   all: 'ทั้งหมด',
@@ -29,11 +31,34 @@ const groupLabel: Record<'list' | 'day' | 'month' | 'year', string> = {
 }
 
 export default function HistoryPage() {
-  const { transactions, deleteTransaction } = useFinanceStore()
+  const searchParams = useSearchParams()
+  const { transactions, deleteTransaction, updateTransaction, addTransaction } = useFinanceStore()
   const [searchQuery, setSearchQuery] = useState('')
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all')
   const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc' | 'category'>('date-desc')
   const [groupBy, setGroupBy] = useState<'list' | 'day' | 'month' | 'year'>('list')
+  const [editingTransaction, setEditingTransaction] = useState<any>(null)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    const type = searchParams.get('type')
+    if (type === 'income' || type === 'expense') {
+      setFilterType(type)
+    }
+  }, [searchParams])
+
+
+  const toggleGroupExpanded = (groupKey: string) => {
+    const newExpanded = new Set(expandedGroups)
+    if (newExpanded.has(groupKey)) {
+      newExpanded.delete(groupKey)
+    } else {
+      newExpanded.add(groupKey)
+    }
+    setExpandedGroups(newExpanded)
+  }
+
 
   const filtered = useMemo(() => {
     const q = searchQuery.toLowerCase()
@@ -108,6 +133,48 @@ export default function HistoryPage() {
   const totalExpense = filtered
     .filter((t) => t.type === 'expense')
     .reduce((s, t) => s + t.amount, 0)
+
+  const handleOpenEdit = (transaction: any) => {
+    setEditingTransaction(transaction)
+    setIsEditModalOpen(true)
+  }
+
+  const handleSaveEdit = async (updates: any) => {
+    if (!editingTransaction) return
+
+    // Handle multiple income items
+    if (updates.incomes && updates.isMultiple) {
+      const incomes = updates.incomes
+
+      // Update the first income item
+      if (incomes.length > 0) {
+        await updateTransaction(editingTransaction.id, {
+          amount: incomes[0].amount,
+          category: incomes[0].category,
+          description: incomes[0].description,
+          date: new Date(incomes[0].date),
+        })
+      }
+
+      // Create new transactions for additional income items
+      for (let i = 1; i < incomes.length; i++) {
+        const inc = incomes[i]
+        addTransaction({
+          type: 'income',
+          amount: inc.amount,
+          category: inc.category,
+          description: inc.description,
+          date: new Date(inc.date),
+        })
+      }
+    } else {
+      // Single transaction update
+      await updateTransaction(editingTransaction.id, updates)
+    }
+
+    setIsEditModalOpen(false)
+    setEditingTransaction(null)
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white dark:from-gray-950 dark:to-black">
@@ -246,12 +313,13 @@ export default function HistoryPage() {
                         key={transaction.id}
                         transaction={transaction}
                         onDelete={() => deleteTransaction(transaction.id)}
+                        onEdit={() => handleOpenEdit(transaction)}
                       />
                     ))}
                   </div>
                 ) : (
-                  // Grouped view
-                  <div className="space-y-6">
+                  // Grouped view with accordion
+                  <div className="space-y-3">
                     {Object.entries(grouped || {})
                       .sort(([keyA], [keyB]) => {
                         // Sort groups
@@ -268,52 +336,85 @@ export default function HistoryPage() {
                           .filter((t) => t.type === 'expense')
                           .reduce((s, t) => s + t.amount, 0)
                         const groupProfit = groupIncome - groupExpense
+                        const isExpanded = expandedGroups.has(groupKey)
 
                         return (
-                          <div key={groupKey} className="border-l-4 border-primary-400 dark:border-primary-500 pl-4">
-                            {/* Group Header */}
-                            <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-200 dark:border-gray-700">
-                              <h3 className="text-lg font-semibold text-black dark:text-white">
+                          <div key={groupKey} className="border rounded-lg border-gray-200 dark:border-gray-700 overflow-hidden">
+                            {/* Accordion Header */}
+                            <button
+                              onClick={() => toggleGroupExpanded(groupKey)}
+                              className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border-l-4 border-primary-400 dark:border-primary-500"
+                            >
+                              <h3 className="text-lg font-semibold text-black dark:text-white text-left">
                                 {groupKey}
                               </h3>
-                              <div className="flex items-center gap-4 text-sm">
-                                <div className="text-right">
-                                  <p className="text-xs text-gray-600 dark:text-gray-400">รายรับ</p>
-                                  <p className="font-bold text-green-600 dark:text-green-400">
+                              <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-4 text-sm hidden sm:flex">
+                                  <div className="text-right">
+                                    <p className="text-xs text-gray-600 dark:text-gray-400">รายรับ</p>
+                                    <p className="font-bold text-green-600 dark:text-green-400">
+                                      {formatCurrency(groupIncome)}
+                                    </p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-xs text-gray-600 dark:text-gray-400">รายจ่าย</p>
+                                    <p className="font-bold text-red-600 dark:text-red-400">
+                                      {formatCurrency(groupExpense)}
+                                    </p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-xs text-gray-600 dark:text-gray-400">สุทธิ</p>
+                                    <p
+                                      className={`font-bold ${
+                                        groupProfit >= 0
+                                          ? 'text-blue-600 dark:text-blue-400'
+                                          : 'text-red-600 dark:text-red-400'
+                                      }`}
+                                    >
+                                      {formatCurrency(groupProfit)}
+                                    </p>
+                                  </div>
+                                </div>
+                                <ChevronDown
+                                  size={20}
+                                  className={`text-gray-600 dark:text-gray-400 flex-shrink-0 transition-transform ${
+                                    isExpanded ? 'rotate-180' : ''
+                                  }`}
+                                />
+                              </div>
+                            </button>
+
+                            {/* Accordion Content */}
+                            {isExpanded && (
+                              <div className="divide-y divide-border-light dark:divide-gray-800">
+                                {items.map((transaction) => (
+                                  <TransactionRow
+                                    key={transaction.id}
+                                    transaction={transaction}
+                                    onDelete={() => deleteTransaction(transaction.id)}
+                                    onEdit={() => handleOpenEdit(transaction)}
+                                  />
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Mobile Stats (shown when header only visible) */}
+                            {!isExpanded && (
+                              <div className="flex gap-3 p-3 text-xs sm:hidden border-t border-gray-200 dark:border-gray-700">
+                                <div>
+                                  <span className="text-gray-600 dark:text-gray-400">รายรับ: </span>
+                                  <span className="font-bold text-green-600 dark:text-green-400">
                                     {formatCurrency(groupIncome)}
-                                  </p>
+                                  </span>
                                 </div>
-                                <div className="text-right">
-                                  <p className="text-xs text-gray-600 dark:text-gray-400">รายจ่าย</p>
-                                  <p className="font-bold text-red-600 dark:text-red-400">
+                                <div>
+                                  <span className="text-gray-600 dark:text-gray-400">รายจ่าย: </span>
+                                  <span className="font-bold text-red-600 dark:text-red-400">
                                     {formatCurrency(groupExpense)}
-                                  </p>
-                                </div>
-                                <div className="text-right">
-                                  <p className="text-xs text-gray-600 dark:text-gray-400">สุทธิ</p>
-                                  <p
-                                    className={`font-bold ${
-                                      groupProfit >= 0
-                                        ? 'text-blue-600 dark:text-blue-400'
-                                        : 'text-red-600 dark:text-red-400'
-                                    }`}
-                                  >
-                                    {formatCurrency(groupProfit)}
-                                  </p>
+                                  </span>
                                 </div>
                               </div>
-                            </div>
-
-                            {/* Group Items */}
-                            <div className="divide-y divide-border-light dark:divide-gray-800">
-                              {items.map((transaction) => (
-                                <TransactionRow
-                                  key={transaction.id}
-                                  transaction={transaction}
-                                  onDelete={() => deleteTransaction(transaction.id)}
-                                />
-                              ))}
-                            </div>
+                            )}
                           </div>
                         )
                       })}
@@ -328,6 +429,17 @@ export default function HistoryPage() {
           </CardContent>
         </Card>
       </main>
+
+      {/* Edit Modal */}
+      <EditTransactionModal
+        isOpen={isEditModalOpen}
+        transaction={editingTransaction}
+        onClose={() => {
+          setIsEditModalOpen(false)
+          setEditingTransaction(null)
+        }}
+        onSave={handleSaveEdit}
+      />
     </div>
   )
 }
@@ -335,9 +447,11 @@ export default function HistoryPage() {
 function TransactionRow({
   transaction,
   onDelete,
+  onEdit,
 }: {
   transaction: any
   onDelete: () => void
+  onEdit: () => void
 }) {
   return (
     <div className="flex items-center justify-between py-4 group">
@@ -360,6 +474,13 @@ function TransactionRow({
           {transaction.type === 'income' ? '+' : '-'}
           {formatCurrency(transaction.amount)}
         </span>
+        <button
+          onClick={onEdit}
+          className="p-2 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+          aria-label="แก้ไขรายการ"
+        >
+          <Edit2 size={16} />
+        </button>
         <button
           onClick={onDelete}
           className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"

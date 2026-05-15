@@ -10,6 +10,13 @@ import { INCOME_CATEGORIES, EXPENSE_CATEGORIES } from '@/lib/constants'
 import { formatCurrency, generateId } from '@/lib/utils'
 import { Plus, X } from 'lucide-react'
 
+interface DailyIncome {
+  id: string
+  category: string
+  amount: string
+  description: string
+}
+
 interface DailyExpense {
   id: string
   category: string
@@ -20,11 +27,33 @@ interface DailyExpense {
 export default function IncomePage() {
   const router = useRouter()
   const { addTransaction } = useFinanceStore()
-  const [amount, setAmount] = useState('')
-  const [category, setCategory] = useState(INCOME_CATEGORIES[0].name)
-  const [description, setDescription] = useState('')
+  const [incomes, setIncomes] = useState<DailyIncome[]>([
+    {
+      id: generateId(),
+      category: INCOME_CATEGORIES[0].name,
+      amount: '',
+      description: '',
+    },
+  ])
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [expenses, setExpenses] = useState<DailyExpense[]>([])
+
+  const addIncomeRow = () =>
+    setIncomes([
+      ...incomes,
+      {
+        id: generateId(),
+        category: INCOME_CATEGORIES[0].name,
+        amount: '',
+        description: '',
+      },
+    ])
+
+  const updateIncome = (id: string, patch: Partial<DailyIncome>) =>
+    setIncomes(incomes.map((i) => (i.id === id ? { ...i, ...patch } : i)))
+
+  const removeIncome = (id: string) =>
+    setIncomes(incomes.filter((i) => i.id !== id))
 
   const addExpenseRow = () =>
     setExpenses([
@@ -43,26 +72,37 @@ export default function IncomePage() {
   const removeExpense = (id: string) =>
     setExpenses(expenses.filter((e) => e.id !== id))
 
+  const totalIncome = incomes.reduce(
+    (sum, i) => sum + (parseFloat(i.amount) || 0),
+    0
+  )
   const totalExpense = expenses.reduce(
     (sum, e) => sum + (parseFloat(e.amount) || 0),
     0
   )
-  const grossIncome = parseFloat(amount) || 0
-  const netProfit = grossIncome - totalExpense
+  const netProfit = totalIncome - totalExpense
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (grossIncome <= 0) return
+    if (totalIncome <= 0) return
 
     const txDate = new Date(date)
-    addTransaction({
-      type: 'income',
-      amount: grossIncome,
-      category,
-      description,
-      date: txDate,
+
+    // Add all income items
+    incomes.forEach((inc) => {
+      const value = parseFloat(inc.amount) || 0
+      if (value > 0) {
+        addTransaction({
+          type: 'income',
+          amount: value,
+          category: inc.category,
+          description: inc.description || `รายรับ • ${inc.category}`,
+          date: txDate,
+        })
+      }
     })
 
+    // Add all expense items
     expenses.forEach((exp) => {
       const value = parseFloat(exp.amount) || 0
       if (value > 0) {
@@ -86,79 +126,102 @@ export default function IncomePage() {
       <main className="container-max py-8 max-w-3xl">
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-black dark:text-white">
-            บันทึกรายรับ
+            บันทึกยอดขาย
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
-            บันทึกยอดขายและค่าใช้จ่ายระหว่างวัน
+            บันทึกรายรับและรายจ่ายของวันนี้ในหน้าเดียว
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Income card */}
           <Card>
-            <CardHeader>
-              <CardTitle>ยอดขาย</CardTitle>
+            <CardHeader className="flex-between">
+              <div>
+                <CardTitle>รายรับ</CardTitle>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  บันทึกหลายรายรับในครั้งเดียว
+                </p>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                type="button"
+                onClick={addIncomeRow}
+              >
+                <Plus size={16} />
+                เพิ่มรายรับ
+              </Button>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-black dark:text-white mb-3">
-                  ช่องทางการขาย
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {INCOME_CATEGORIES.map((cat) => (
-                    <button
-                      key={cat.name}
-                      type="button"
-                      onClick={() => setCategory(cat.name)}
-                      className={`p-3 rounded-lg border-2 transition-all text-center ${
-                        category === cat.name
-                          ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
-                          : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
-                      }`}
-                    >
-                      <div className="text-2xl mb-1">{cat.icon}</div>
-                      <div className="text-xs font-medium text-black dark:text-white">
-                        {cat.name}
+            <CardContent>
+              <div className="space-y-3">
+                {incomes.map((inc, idx) => (
+                  <div
+                    key={inc.id}
+                    className="grid grid-cols-12 gap-2 items-start p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg"
+                  >
+                    <div className="col-span-12 sm:col-span-4">
+                      <select
+                        value={inc.category}
+                        onChange={(e) =>
+                          updateIncome(inc.id, { category: e.target.value })
+                        }
+                        className="select w-full text-sm"
+                      >
+                        {INCOME_CATEGORIES.map((cat) => (
+                          <option key={cat.name} value={cat.name}>
+                            {cat.icon} {cat.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-span-7 sm:col-span-3">
+                      <div className="relative">
+                        <span className="absolute left-3 top-2.5 text-gray-500 text-sm">
+                          ฿
+                        </span>
+                        <input
+                          type="number"
+                          value={inc.amount}
+                          onChange={(e) =>
+                            updateIncome(inc.id, { amount: e.target.value })
+                          }
+                          className="input pl-7 text-sm py-2"
+                          placeholder="0.00"
+                          step="0.01"
+                          min="0"
+                        />
                       </div>
-                    </button>
-                  ))}
-                </div>
+                    </div>
+                    <div className="col-span-4 sm:col-span-4">
+                      <input
+                        type="text"
+                        value={inc.description}
+                        onChange={(e) =>
+                          updateIncome(inc.id, { description: e.target.value })
+                        }
+                        className="input text-sm py-2"
+                        placeholder="รายละเอียด"
+                      />
+                    </div>
+                    {incomes.length > 1 && (
+                      <div className="col-span-1 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => removeIncome(inc.id)}
+                          className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                          aria-label={`ลบรายการที่ ${idx + 1}`}
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-black dark:text-white mb-2">
-                  จำนวนเงิน
-                </label>
-                <div className="relative">
-                  <span className="absolute left-4 top-3 text-gray-500">฿</span>
-                  <input
-                    type="number"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    className="input pl-8 text-lg font-semibold"
-                    placeholder="0.00"
-                    step="0.01"
-                    min="0"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-black dark:text-white mb-2">
-                  รายละเอียด
-                </label>
-                <input
-                  type="text"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="input"
-                  placeholder="เช่น ยอดขายวันเสาร์, ขายผ่าน Shopee..."
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                <label className="block text-sm font-medium text-black dark:text-white mb-2 mt-4">
                   วันที่
                 </label>
                 <input
@@ -273,9 +336,9 @@ export default function IncomePage() {
             <CardContent className="py-5">
               <div className="space-y-2">
                 <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">ยอดขาย</span>
+                  <span className="text-gray-600 dark:text-gray-400">รายรับรวม</span>
                   <span className="font-semibold text-green-600 dark:text-green-400">
-                    +{formatCurrency(grossIncome)}
+                    +{formatCurrency(totalIncome)}
                   </span>
                 </div>
                 <div className="flex justify-between">

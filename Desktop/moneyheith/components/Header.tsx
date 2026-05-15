@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { Moon, Sun } from 'lucide-react'
 
 interface AppSettings {
   shopName?: string
@@ -12,8 +13,8 @@ interface AppSettings {
 
 const navItems = [
   { label: 'แดชบอร์ด', href: '/' },
-  { label: 'รายรับ', href: '/income' },
-  { label: 'รายจ่าย', href: '/expense' },
+  { label: 'รายรับ', href: '/history?type=income' },
+  { label: 'รายจ่าย', href: '/history?type=expense' },
   { label: 'วิเคราะห์', href: '/analytics' },
   { label: 'ประวัติ', href: '/history' },
   { label: 'นำเข้า', href: '/import' },
@@ -24,6 +25,7 @@ export default function Header() {
   const pathname = usePathname()
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [isHydrated, setIsHydrated] = useState(false)
+  const [isDarkMode, setIsDarkMode] = useState(false)
 
   useEffect(() => {
     // Load settings from localStorage
@@ -35,8 +37,37 @@ export default function Header() {
         console.error('Failed to load settings:', err)
       }
     }
+
+    // Load dark mode preference
+    const savedDarkMode = localStorage.getItem('darkMode')
+    if (savedDarkMode !== null) {
+      setIsDarkMode(JSON.parse(savedDarkMode))
+    } else {
+      // Detect system preference
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+      setIsDarkMode(prefersDark)
+    }
+
     setIsHydrated(true)
   }, [])
+
+  useEffect(() => {
+    if (!isHydrated) return
+
+    // Apply dark mode to document
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+
+    // Save preference
+    localStorage.setItem('darkMode', JSON.stringify(isDarkMode))
+  }, [isDarkMode, isHydrated])
+
+  const toggleDarkMode = () => {
+    setIsDarkMode(!isDarkMode)
+  }
 
   return (
     <header className="sticky top-0 z-50 w-full bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-border-light dark:border-gray-800">
@@ -83,6 +114,20 @@ export default function Header() {
             </Link>
           ))}
         </nav>
+
+        {/* Dark mode toggle */}
+        <button
+          onClick={toggleDarkMode}
+          className="ml-2 p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          aria-label="Toggle dark mode"
+          title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {isDarkMode ? (
+            <Sun size={20} className="text-yellow-500" />
+          ) : (
+            <Moon size={20} className="text-gray-600" />
+          )}
+        </button>
       </div>
     </header>
   )
