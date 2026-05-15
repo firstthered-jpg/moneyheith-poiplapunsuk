@@ -140,7 +140,7 @@ export default function ImportPage() {
             category: transaction.category,
             amount: transaction.amount,
             type: transaction.type,
-            date: transaction.date,
+            date: new Date(transaction.date),
           })
           successCount++
         } catch (err) {

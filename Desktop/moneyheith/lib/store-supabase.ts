@@ -56,12 +56,16 @@ export const useFinanceStore = create<FinanceStore>((set, get) => ({
   addTransaction: async (transaction) => {
     try {
       const id = generateId()
+      const t = transaction as Omit<Transaction, 'id'> & {
+        deductions?: unknown[]
+        tags?: unknown[]
+      }
       const { error } = await supabase.from('transactions').insert({
         id,
         ...transaction,
         date: new Date(transaction.date).toISOString(),
-        deductions: transaction.deductions || [],
-        tags: transaction.tags || [],
+        deductions: t.deductions || [],
+        tags: t.tags || [],
       })
 
       if (error) throw error

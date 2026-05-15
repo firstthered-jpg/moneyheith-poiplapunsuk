@@ -45,7 +45,14 @@ export async function fetchExpenseBreakdown(monthOffset: number = 0) {
     if (error) throw error
 
     // Group by category
-    const breakdown = (data || []).reduce(
+    type CategoryBreakdown = {
+      category: string
+      total: number
+      count: number
+      items: Transaction[]
+    }
+
+    const breakdown = (data || []).reduce<Record<string, CategoryBreakdown>>(
       (acc, transaction) => {
         const cat = transaction.category
         if (!acc[cat]) {
@@ -56,10 +63,7 @@ export async function fetchExpenseBreakdown(monthOffset: number = 0) {
         acc[cat].items.push(transaction)
         return acc
       },
-      {} as Record<
-        string,
-        { category: string; total: number; count: number; items: Transaction[] }
-      >
+      {}
     )
 
     return Object.values(breakdown).sort((a, b) => b.total - a.total)

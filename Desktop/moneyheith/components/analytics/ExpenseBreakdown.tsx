@@ -39,7 +39,7 @@ export default function ExpenseBreakdown({ monthOffset = 0, title = 'ค่า�
       try {
         setLoading(true)
         const data = await fetchExpenseBreakdown(monthOffset)
-        setBreakdown(data)
+        setBreakdown(data as ExpenseCategory[])
         setError(null)
       } catch (err) {
         console.error('Error loading expense breakdown:', err)
