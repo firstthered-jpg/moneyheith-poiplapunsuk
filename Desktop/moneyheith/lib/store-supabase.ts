@@ -40,10 +40,14 @@ interface FinanceStore {
   }) => Promise<void>
   getHouseholdExpenses: (year?: number, month?: number) => HouseholdExpense[]
 
-  // Monthly revenue / ads (one record per month)
-  setMonthlyRevenue: (year: number, month: number, amount: number) => Promise<void>
-  setMonthlyAds: (year: number, month: number, amount: number) => Promise<void>
+  // Monthly revenue (multiple items per month)
+  addMonthlyRevenueItem: (year: number, month: number, name: string, amount: number) => Promise<void>
+  removeMonthlyRevenueItem: (id: string) => Promise<void>
+  getMonthlyRevenueItems: (year: number, month: number) => Transaction[]
   getMonthlyRevenue: (year: number, month: number) => number
+
+  // Monthly ads (single value per month)
+  setMonthlyAds: (year: number, month: number, amount: number) => Promise<void>
   getMonthlyAds: (year: number, month: number) => number
 
   // Summary
