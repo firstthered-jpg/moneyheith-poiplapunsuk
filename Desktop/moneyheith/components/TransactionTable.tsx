@@ -3,7 +3,7 @@
 import React from 'react'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from './Card'
-import { useFinanceStore } from '@/lib/store'
+import { useFinanceStore } from '@/lib/store-supabase'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
 export default function TransactionTable() {

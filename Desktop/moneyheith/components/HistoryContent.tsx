@@ -1,17 +1,19 @@
 'use client'
 
-import React, { useState, useMemo, useEffect } from 'react'
-import { useSearchParams } from 'next/navigation'
+import React, { useEffect, useState, useMemo } from 'react'
 import { Card, CardContent } from '@/components/Card'
 import { useFinanceStore } from '@/lib/store-supabase'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatCurrency, formatDate, categoryLabel, kindOfCategory, type TxKind } from '@/lib/utils'
 import { Search, Trash2, ChevronDown, Edit2 } from 'lucide-react'
 import EditTransactionModal from '@/components/EditTransactionModal'
 
-const typeLabel: Record<'all' | 'income' | 'expense', string> = {
+const kindLabel: Record<TxKind, string> = {
   all: 'ทั้งหมด',
-  income: 'รายรับ',
-  expense: 'รายจ่าย',
+  daily_cost: 'ต้นทุนรายวัน',
+  household: 'รายจ่ายในบ้าน',
+  monthly_revenue: 'รายรับ',
+  monthly_ads: 'ค่าโฆษณา',
+  other: 'อื่นๆ',
 }
 
 const sortLabel: Record<'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc' | 'category', string> = {
@@ -30,22 +32,20 @@ const groupLabel: Record<'list' | 'day' | 'month' | 'year', string> = {
 }
 
 export default function HistoryContent() {
-  const searchParams = useSearchParams()
-  const { transactions, deleteTransaction, updateTransaction, addTransaction } = useFinanceStore()
+  const { transactions, deleteTransaction, updateTransaction, fetchTransactions } =
+    useFinanceStore()
+
+  useEffect(() => {
+    fetchTransactions()
+  }, [fetchTransactions])
+
   const [searchQuery, setSearchQuery] = useState('')
-  const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all')
+  const [filterKind, setFilterKind] = useState<TxKind>('all')
   const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc' | 'category'>('date-desc')
   const [groupBy, setGroupBy] = useState<'list' | 'day' | 'month' | 'year'>('list')
   const [editingTransaction, setEditingTransaction] = useState<any>(null)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
-
-  useEffect(() => {
-    const type = searchParams.get('type')
-    if (type === 'income' || type === 'expense') {
-      setFilterType(type)
-    }
-  }, [searchParams])
 
   const toggleGroupExpanded = (groupKey: string) => {
     const newExpanded = new Set(expandedGroups)
@@ -60,14 +60,14 @@ export default function HistoryContent() {
   const filtered = useMemo(() => {
     const q = searchQuery.toLowerCase()
     let result = transactions.filter((t) => {
+      const label = categoryLabel(t.category).toLowerCase()
       const matchesSearch =
-        (t.description || '').toLowerCase().includes(q) ||
-        t.category.toLowerCase().includes(q)
-      const matchesType = filterType === 'all' || t.type === filterType
-      return matchesSearch && matchesType
+        (t.description || '').toLowerCase().includes(q) || label.includes(q)
+      const kind = kindOfCategory(t.category)
+      const matchesKind = filterKind === 'all' || kind === filterKind
+      return matchesSearch && matchesKind
     })
 
-    // Apply sorting
     switch (sortBy) {
       case 'date-asc':
         result.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
@@ -79,7 +79,9 @@ export default function HistoryContent() {
         result.sort((a, b) => a.amount - b.amount)
         break
       case 'category':
-        result.sort((a, b) => a.category.localeCompare(b.category, 'th'))
+        result.sort((a, b) =>
+          categoryLabel(a.category).localeCompare(categoryLabel(b.category), 'th')
+        )
         break
       case 'date-desc':
       default:
@@ -87,23 +89,21 @@ export default function HistoryContent() {
     }
 
     return result
-  }, [transactions, searchQuery, filterType, sortBy])
+  }, [transactions, searchQuery, filterKind, sortBy])
 
-  // Group transactions
   const grouped = useMemo(() => {
-    if (groupBy === 'list') {
-      return null
-    }
-
+    if (groupBy === 'list') return null
     const groups: Record<string, typeof filtered> = {}
-
     filtered.forEach((transaction) => {
       const date = new Date(transaction.date)
       let key: string
-
       switch (groupBy) {
         case 'day':
-          key = date.toLocaleDateString('th-TH', { year: 'numeric', month: '2-digit', day: '2-digit' })
+          key = date.toLocaleDateString('th-TH', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+          })
           break
         case 'month':
           key = date.toLocaleDateString('th-TH', { year: 'numeric', month: 'long' })
@@ -114,13 +114,9 @@ export default function HistoryContent() {
         default:
           key = 'other'
       }
-
-      if (!groups[key]) {
-        groups[key] = []
-      }
+      if (!groups[key]) groups[key] = []
       groups[key].push(transaction)
     })
-
     return groups
   }, [filtered, groupBy])
 
@@ -138,37 +134,7 @@ export default function HistoryContent() {
 
   const handleSaveEdit = async (updates: any) => {
     if (!editingTransaction) return
-
-    // Handle multiple income items
-    if (updates.incomes && updates.isMultiple) {
-      const incomes = updates.incomes
-
-      // Update the first income item
-      if (incomes.length > 0) {
-        await updateTransaction(editingTransaction.id, {
-          amount: incomes[0].amount,
-          category: incomes[0].category,
-          description: incomes[0].description,
-          date: new Date(incomes[0].date),
-        })
-      }
-
-      // Create new transactions for additional income items
-      for (let i = 1; i < incomes.length; i++) {
-        const inc = incomes[i]
-        addTransaction({
-          type: 'income',
-          amount: inc.amount,
-          category: inc.category,
-          description: inc.description,
-          date: new Date(inc.date),
-        })
-      }
-    } else {
-      // Single transaction update
-      await updateTransaction(editingTransaction.id, updates)
-    }
-
+    await updateTransaction(editingTransaction.id, updates)
     setIsEditModalOpen(false)
     setEditingTransaction(null)
   }
@@ -184,7 +150,6 @@ export default function HistoryContent() {
         </p>
       </div>
 
-      {/* Summary */}
       <div className="grid grid-cols-3 gap-3">
         <Card>
           <CardContent className="py-4">
@@ -218,16 +183,11 @@ export default function HistoryContent() {
         </Card>
       </div>
 
-      {/* Filters & Controls */}
       <Card>
         <CardContent className="pt-6 space-y-4">
-          {/* Search & Type Filter */}
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1 relative">
-              <Search
-                size={18}
-                className="absolute left-3 top-3 text-gray-500"
-              />
+              <Search size={18} className="absolute left-3 top-3 text-gray-500" />
               <input
                 type="text"
                 placeholder="ค้นหาตามรายละเอียดหรือหมวดหมู่..."
@@ -236,26 +196,27 @@ export default function HistoryContent() {
                 className="input pl-10 w-full"
               />
             </div>
-            <div className="flex gap-2">
-              {(['all', 'income', 'expense'] as const).map((type) => (
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {(['all', 'daily_cost', 'household', 'monthly_revenue', 'monthly_ads', 'other'] as const).map(
+              (kind) => (
                 <button
-                  key={type}
-                  onClick={() => setFilterType(type)}
-                  className={`px-4 py-2 rounded-lg font-medium text-sm transition-all whitespace-nowrap ${
-                    filterType === type
+                  key={kind}
+                  onClick={() => setFilterKind(kind)}
+                  className={`px-3 py-1.5 rounded-lg font-medium text-sm transition-all whitespace-nowrap ${
+                    filterKind === kind
                       ? 'bg-black dark:bg-white text-white dark:text-black'
                       : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
                   }`}
                 >
-                  {typeLabel[type]}
+                  {kindLabel[kind]}
                 </button>
-              ))}
-            </div>
+              )
+            )}
           </div>
 
-          {/* Sort & Group Controls */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {/* Group By */}
             <div>
               <label className="text-xs font-semibold text-gray-600 dark:text-gray-400 block mb-2">
                 จัดกลุ่มตาม
@@ -273,7 +234,6 @@ export default function HistoryContent() {
               </select>
             </div>
 
-            {/* Sort By */}
             <div className="sm:col-span-3">
               <label className="text-xs font-semibold text-gray-600 dark:text-gray-400 block mb-2">
                 เรียงลำดับตาม
@@ -283,18 +243,19 @@ export default function HistoryContent() {
                 onChange={(e) => setSortBy(e.target.value as any)}
                 className="input text-sm w-full"
               >
-                {(['date-desc', 'date-asc', 'amount-desc', 'amount-asc', 'category'] as const).map((sort) => (
-                  <option key={sort} value={sort}>
-                    {sortLabel[sort]}
-                  </option>
-                ))}
+                {(['date-desc', 'date-asc', 'amount-desc', 'amount-asc', 'category'] as const).map(
+                  (sort) => (
+                    <option key={sort} value={sort}>
+                      {sortLabel[sort]}
+                    </option>
+                  )
+                )}
               </select>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* List View */}
       {groupBy === 'list' && (
         <div className="space-y-2">
           {filtered.length === 0 ? (
@@ -308,13 +269,15 @@ export default function HistoryContent() {
               <Card key={transaction.id}>
                 <CardContent className="py-4">
                   <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <p className="font-semibold text-black dark:text-white">
-                        {transaction.category}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-black dark:text-white truncate">
+                        {categoryLabel(transaction.category)}
                       </p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                        {transaction.description}
-                      </p>
+                      {transaction.description && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
+                          {transaction.description}
+                        </p>
+                      )}
                       <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
                         {formatDate(new Date(transaction.date))}
                       </p>
@@ -328,7 +291,8 @@ export default function HistoryContent() {
                               : 'text-red-600 dark:text-red-400'
                           }`}
                         >
-                          {transaction.type === 'income' ? '+' : '-'}{formatCurrency(transaction.amount)}
+                          {transaction.type === 'income' ? '+' : '-'}
+                          {formatCurrency(transaction.amount)}
                         </p>
                       </div>
                       <button
@@ -354,21 +318,23 @@ export default function HistoryContent() {
         </div>
       )}
 
-      {/* Grouped View - Accordion */}
       {groupBy !== 'list' && grouped && (
         <div className="space-y-3">
           {Object.entries(grouped)
             .sort(([keyA], [keyB]) => keyB.localeCompare(keyA, 'th'))
             .map(([groupKey, items]) => {
-              const income = items.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0)
-              const expense = items.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
+              const income = items
+                .filter((t) => t.type === 'income')
+                .reduce((s, t) => s + t.amount, 0)
+              const expense = items
+                .filter((t) => t.type === 'expense')
+                .reduce((s, t) => s + t.amount, 0)
               const net = income - expense
               const isExpanded = expandedGroups.has(groupKey)
 
               return (
                 <Card key={groupKey}>
                   <CardContent className="p-0">
-                    {/* Header - Accordion trigger */}
                     <button
                       onClick={() => toggleGroupExpanded(groupKey)}
                       className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
@@ -377,7 +343,6 @@ export default function HistoryContent() {
                         <p className="font-semibold text-black dark:text-white">
                           {groupKey}
                         </p>
-                        {/* Mobile summary - show below header */}
                         <div className="sm:hidden text-xs text-gray-600 dark:text-gray-400 mt-1 space-y-0.5">
                           <div>รายรับ: {formatCurrency(income)}</div>
                           <div>รายจ่าย: {formatCurrency(expense)}</div>
@@ -393,7 +358,6 @@ export default function HistoryContent() {
                         </div>
                       </div>
                       <div className="flex items-center gap-4">
-                        {/* Desktop stats - show inline */}
                         <div className="hidden sm:flex gap-4 text-sm">
                           <div className="text-right">
                             <p className="text-gray-600 dark:text-gray-400">รายรับ</p>
@@ -429,11 +393,12 @@ export default function HistoryContent() {
                       </div>
                     </button>
 
-                    {/* Content - Accordion body */}
                     {isExpanded && (
                       <div className="border-t border-gray-200 dark:border-gray-700 px-6 py-4 space-y-2">
                         {items.length === 0 ? (
-                          <p className="text-sm text-gray-500 dark:text-gray-500">ไม่มีรายการ</p>
+                          <p className="text-sm text-gray-500 dark:text-gray-500">
+                            ไม่มีรายการ
+                          </p>
                         ) : (
                           items.map((transaction) => (
                             <div
@@ -442,11 +407,13 @@ export default function HistoryContent() {
                             >
                               <div className="flex-1 min-w-0">
                                 <p className="font-medium text-black dark:text-white text-sm">
-                                  {transaction.category}
+                                  {categoryLabel(transaction.category)}
                                 </p>
-                                <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
-                                  {transaction.description}
-                                </p>
+                                {transaction.description && (
+                                  <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                                    {transaction.description}
+                                  </p>
+                                )}
                               </div>
                               <div className="flex items-center gap-2 ml-2">
                                 <div className="text-right">

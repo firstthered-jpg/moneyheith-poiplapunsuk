@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Sarabun } from 'next/font/google'
 import './globals.css'
+import StickyDailyCostButton from '@/components/StickyDailyCostButton'
 
 const sarabun = Sarabun({
   subsets: ['thai', 'latin'],
@@ -31,6 +32,7 @@ export default function RootLayout({
       <body className={sarabun.className}>
         <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white dark:from-gray-950 dark:to-black">
           {children}
+          <StickyDailyCostButton />
         </div>
       </body>
     </html>

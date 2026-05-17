@@ -10,12 +10,11 @@ import {
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from './Card'
 import { useFinanceStore } from '@/lib/store-supabase'
-import { EXPENSE_CATEGORIES, CHART_PALETTE } from '@/lib/constants'
-import { formatCurrency } from '@/lib/utils'
+import { CHART_PALETTE } from '@/lib/constants'
+import { formatCurrency, categoryLabel } from '@/lib/utils'
 
-function getCategoryColor(name: string, fallbackIdx: number): string {
-  const cat = EXPENSE_CATEGORIES.find((c) => c.name === name)
-  return cat?.color || CHART_PALETTE[fallbackIdx % CHART_PALETTE.length]
+function getCategoryColor(_name: string, fallbackIdx: number): string {
+  return CHART_PALETTE[fallbackIdx % CHART_PALETTE.length]
 }
 
 const CustomTooltip = ({ active, payload }: any) => {
@@ -74,7 +73,7 @@ export default function ExpenseBreakdown() {
     const total = Array.from(byCat.values()).reduce((s, v) => s + v, 0)
     const data = Array.from(byCat.entries())
       .map(([name, value], idx) => ({
-        name,
+        name: categoryLabel(name),
         value,
         percent: total > 0 ? (value / total) * 100 : 0,
         color: getCategoryColor(name, idx),

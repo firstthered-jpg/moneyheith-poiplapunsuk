@@ -1,33 +1,24 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import Header from '@/components/Header'
-import WelcomeBanner from '@/components/WelcomeBanner'
 import StatCard from '@/components/StatCard'
-import CashflowChart from '@/components/CashflowChart'
-import ExpenseBreakdown from '@/components/ExpenseBreakdown'
-import DailyRevenue from '@/components/DailyRevenue'
-import TransactionTable from '@/components/TransactionTable'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/Card'
 import { useFinanceStore } from '@/lib/store-supabase'
-import { formatCurrency } from '@/lib/utils'
-
-const periodLabel = (p: 'day' | 'month' | 'year') =>
-  p === 'day' ? 'วันนี้' : p === 'month' ? 'เดือนนี้' : 'ปีนี้'
+import { formatCurrency, formatDate } from '@/lib/utils'
 
 export default function Dashboard() {
   const [isHydrated, setIsHydrated] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
-  const { getDashboardStats, period, setPeriod, fetchTransactions } = useFinanceStore()
-  const stats = getDashboardStats()
-  const isProfit = stats.netProfit >= 0
-  const margin =
-    stats.totalIncome > 0
-      ? (stats.netProfit / stats.totalIncome) * 100
-      : 0
+  const { fetchTransactions, getMonthlySummary, getDailyCosts } = useFinanceStore()
+
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth() + 1
 
   useEffect(() => {
-    const loadData = async () => {
+    const load = async () => {
       setIsHydrated(true)
       setIsLoading(true)
       try {
@@ -37,8 +28,23 @@ export default function Dashboard() {
       }
       setIsLoading(false)
     }
-    loadData()
+    load()
   }, [fetchTransactions])
+
+  const summary = getMonthlySummary(year, month)
+  const recentDailyCosts = useMemo(
+    () => getDailyCosts().slice(0, 5),
+    [getDailyCosts]
+  )
+
+  const monthLabel = useMemo(
+    () =>
+      new Date(year, month - 1, 1).toLocaleDateString('th-TH', {
+        year: 'numeric',
+        month: 'long',
+      }),
+    [year, month]
+  )
 
   if (!isHydrated || isLoading) {
     return (
@@ -58,96 +64,143 @@ export default function Dashboard() {
       <Header />
 
       <main className="container-max py-8 space-y-6">
-        {/* Welcome Banner */}
-        <WelcomeBanner />
-
-        {/* Title */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-black dark:text-white">
-              แดชบอร์ดร้านค้า
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-1">
-              สรุปยอดขาย รายจ่าย และกำไรของร้าน
-            </p>
-          </div>
-          <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded-lg p-1 self-start sm:self-auto">
-            {(['day', 'month', 'year'] as const).map((p) => (
-              <button
-                key={p}
-                onClick={() => setPeriod(p)}
-                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-                  period === p
-                    ? 'bg-black dark:bg-white text-white dark:text-black shadow'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white'
-                }`}
-              >
-                {periodLabel(p)}
-              </button>
-            ))}
-          </div>
+        <div>
+          <h1 className="text-3xl font-bold text-black dark:text-white">
+            แดชบอร์ดร้านค้า
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">
+            สรุปต้นทุน รายรับ และเงินคงเหลือของ {monthLabel}
+          </p>
         </div>
 
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
             icon="📈"
-            label="ยอดขาย"
-            value={formatCurrency(stats.totalIncome)}
-            subValue={`${periodLabel(period)}`}
+            label="ยอดรายรับเดือนนี้"
+            value={formatCurrency(summary.revenue)}
+            subValue={monthLabel}
             color="green"
             variant="featured"
           />
           <StatCard
-            icon="💸"
-            label="รายจ่าย"
-            value={formatCurrency(stats.totalExpense)}
-            subValue={`${periodLabel(period)}`}
+            icon="📦"
+            label="ต้นทุนรายวันรวม"
+            value={formatCurrency(summary.totalDailyCost)}
+            subValue={monthLabel}
             color="red"
             variant="featured"
           />
           <StatCard
-            icon={isProfit ? '💰' : '📉'}
-            label={isProfit ? 'กำไรสุทธิ' : 'ขาดทุนสุทธิ'}
-            value={formatCurrency(Math.abs(stats.netProfit))}
-            subValue={`${periodLabel(period)}`}
-            color={isProfit ? 'blue' : 'red'}
+            icon={summary.storeNet >= 0 ? '💰' : '📉'}
+            label={summary.storeNet >= 0 ? 'ยอดสุทธิร้าน' : 'ขาดทุนสุทธิร้าน'}
+            value={formatCurrency(Math.abs(summary.storeNet))}
+            subValue={`หักโฆษณา ${formatCurrency(summary.ads)}`}
+            color={summary.storeNet >= 0 ? 'blue' : 'red'}
             variant="featured"
           />
           <StatCard
-            icon="📊"
-            label="อัตรากำไร"
-            value={`${margin.toFixed(1)}%`}
-            subValue={
-              margin >= 20 ? 'ดีมาก' : margin >= 10 ? 'ปานกลาง' : 'ควรปรับปรุง'
-            }
-            color={margin >= 10 ? 'yellow' : 'red'}
+            icon={summary.remaining >= 0 ? '🏡' : '⚠️'}
+            label={summary.remaining >= 0 ? 'เงินคงเหลือ' : 'ขาดทุนคงเหลือ'}
+            value={formatCurrency(Math.abs(summary.remaining))}
+            subValue={`หักรายจ่ายในบ้าน ${formatCurrency(summary.totalHousehold)}`}
+            color={summary.remaining >= 0 ? 'yellow' : 'red'}
             variant="featured"
           />
         </div>
 
-        {/* Quick action - Single button */}
-        <Link
-          href="/income"
-          className="inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white font-bold py-6 text-lg shadow-md transition-all hover:shadow-lg"
-        >
-          + บันทึกยอดขาย
-        </Link>
-
-        {/* Daily Revenue */}
-        <DailyRevenue />
-
-        {/* Cashflow + Breakdown */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
-            <CashflowChart />
-          </div>
-          <div>
-            <ExpenseBreakdown />
-          </div>
+        {/* Quick actions */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <Link
+            href="/daily-cost"
+            className="flex flex-col items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white font-bold py-5 px-4 shadow-md transition-all hover:shadow-lg"
+          >
+            <span className="text-2xl mb-1">📦</span>
+            <span>บันทึกต้นทุนรายวัน</span>
+          </Link>
+          <Link
+            href="/household"
+            className="flex flex-col items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-pink-500 hover:from-orange-600 hover:to-pink-600 text-white font-bold py-5 px-4 shadow-md transition-all hover:shadow-lg"
+          >
+            <span className="text-2xl mb-1">🏡</span>
+            <span>บันทึกรายจ่ายในบ้าน</span>
+          </Link>
+          <Link
+            href="/summary"
+            className="flex flex-col items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold py-5 px-4 shadow-md transition-all hover:shadow-lg"
+          >
+            <span className="text-2xl mb-1">📊</span>
+            <span>หน้าสรุปยอด</span>
+          </Link>
         </div>
 
-        <TransactionTable />
+        {/* Recent daily costs */}
+        <Card>
+          <CardHeader className="flex-between">
+            <CardTitle>ต้นทุนรายวันล่าสุด</CardTitle>
+            <Link
+              href="/daily-cost"
+              className="text-sm text-primary-400 hover:text-primary-500"
+            >
+              ดูทั้งหมด →
+            </Link>
+          </CardHeader>
+          <CardContent>
+            {recentDailyCosts.length === 0 ? (
+              <div className="text-center text-gray-500 py-6">
+                ยังไม่มีรายการต้นทุน
+              </div>
+            ) : (
+              <div className="divide-y divide-border-light dark:divide-gray-800">
+                {recentDailyCosts.map((dc) => {
+                  const paid = dc.payments.reduce((s, p) => s + p.amount, 0)
+                  const remaining = dc.amount - paid
+                  return (
+                    <div
+                      key={dc.id}
+                      className="flex items-center justify-between py-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-sm text-black dark:text-white">
+                          {formatDate(dc.date)}
+                        </p>
+                        {dc.description && (
+                          <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                            {dc.description}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-4 ml-3">
+                        <div className="text-right">
+                          <p className="text-xs text-gray-600 dark:text-gray-400">
+                            ต้นทุน
+                          </p>
+                          <p className="font-semibold text-black dark:text-white">
+                            {formatCurrency(dc.amount)}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-gray-600 dark:text-gray-400">
+                            คงเหลือ
+                          </p>
+                          <p
+                            className={`font-semibold ${
+                              remaining > 0
+                                ? 'text-orange-600 dark:text-orange-400'
+                                : 'text-blue-600 dark:text-blue-400'
+                            }`}
+                          >
+                            {formatCurrency(remaining)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </main>
     </div>
   )

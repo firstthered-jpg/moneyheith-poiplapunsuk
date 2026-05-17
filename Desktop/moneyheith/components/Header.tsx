@@ -13,11 +13,11 @@ interface AppSettings {
 
 const navItems = [
   { label: 'แดชบอร์ด', href: '/' },
-  { label: 'รายรับ', href: '/history?type=income' },
-  { label: 'รายจ่าย', href: '/history?type=expense' },
+  { label: 'ต้นทุนรายวัน', href: '/daily-cost' },
+  { label: 'รายจ่ายในบ้าน', href: '/household' },
+  { label: 'สรุปยอด', href: '/summary' },
   { label: 'วิเคราะห์', href: '/analytics' },
   { label: 'ประวัติ', href: '/history' },
-  { label: 'นำเข้า', href: '/import' },
   { label: 'ตั้งค่า', href: '/settings' },
 ]
 
